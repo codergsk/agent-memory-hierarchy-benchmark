@@ -1,0 +1,8 @@
+__pycache__/
+*.pyc
+.env
+benchmark_results_*.json
+benchmark_report_*.html
+.DS_Store
+.venv/
+run_full*.log

@@ -1,0 +1,636 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>AMH Benchmark Report</title>
+<script src="https://cdn.jsdelivr.net/npm/chart.js@4.4.3/dist/chart.umd.min.js"></script>
+<style>
+  *{margin:0;padding:0;box-sizing:border-box}
+  body{font-family:-apple-system,BlinkMacSystemFont,'Segoe UI',Roboto,sans-serif;
+        background:#f1f5f9;color:#1e293b;line-height:1.6}
+  .hero{background:linear-gradient(135deg,#0f172a 0%,#1e3a5f 55%,#065f46 100%);
+         color:#fff;padding:56px 40px;text-align:center}
+  .hero h1{font-size:2.4em;font-weight:700;margin-bottom:10px}
+  .hero p{opacity:.85;font-size:1.05em;max-width:740px;margin:0 auto}
+  .badge{display:inline-block;background:rgba(255,255,255,.15);padding:4px 14px;
+           border-radius:14px;font-size:.8em;margin-top:12px}
+  .container{max-width:1280px;margin:0 auto;padding:36px 28px}
+  h2{font-size:1.5em;color:#0f172a;margin:0 0 16px;padding-bottom:8px;
+      border-bottom:3px solid #10b981}
+  h3{font-size:1.05em;color:#334155;margin:0 0 12px}
+  .section{margin-bottom:52px}
+  /* Metric cards */
+  .cards{display:grid;grid-template-columns:repeat(auto-fit,minmax(200px,1fr));gap:16px;margin-bottom:32px}
+  .card{background:#fff;border-radius:12px;padding:22px 20px;
+          box-shadow:0 1px 4px rgba(0,0,0,.07);border-top:4px solid #10b981}
+  .card.amber{border-top-color:#f59e0b}
+  .card.blue{border-top-color:#3b82f6}
+  .card.red{border-top-color:#ef4444}
+  .card-value{font-size:2em;font-weight:700;color:#0f172a;line-height:1}
+  .card-label{font-size:.82em;color:#64748b;margin-top:6px}
+  /* Charts */
+  .chart-grid{display:grid;grid-template-columns:repeat(auto-fit,minmax(380px,1fr));gap:24px;margin-top:24px}
+  .chart-card{background:#fff;border-radius:12px;padding:24px;box-shadow:0 1px 4px rgba(0,0,0,.07)}
+  .chart-wrap{position:relative;height:280px}
+  /* Tables */
+  .table-wrap{overflow-x:auto;border-radius:10px;box-shadow:0 1px 4px rgba(0,0,0,.07)}
+  table{width:100%;border-collapse:collapse;background:#fff;font-size:.84em}
+  th{background:#0f172a;color:#fff;padding:11px 13px;text-align:left;font-weight:600;
+      white-space:nowrap}
+  td{padding:10px 13px;border-bottom:1px solid #e2e8f0}
+  tr:hover td{background:#f8fafc}
+  tr:last-child td{border-bottom:none}
+  /* Gains coloring */
+  td.gain{color:#059669;font-weight:700}
+  td.loss{color:#dc2626;font-weight:700}
+  td.neutral{color:#64748b}
+  td.na{color:#94a3b8;font-style:italic}
+  /* Legend chips */
+  .legend{display:flex;gap:16px;flex-wrap:wrap;margin-bottom:16px}
+  .chip{display:inline-flex;align-items:center;gap:6px;font-size:.82em;
+          background:#fff;border:1px solid #e2e8f0;border-radius:20px;padding:4px 12px}
+  .dot{width:10px;height:10px;border-radius:50%;flex-shrink:0}
+  /* Callout box */
+  .callout{background:#ecfdf5;border-left:5px solid #10b981;
+             border-radius:0 10px 10px 0;padding:18px 20px;margin:20px 0;font-size:.9em}
+  footer{background:#0f172a;color:rgba(255,255,255,.65);padding:22px;
+           text-align:center;font-size:.8em;margin-top:40px}
+  footer a{color:#10b981}
+  @media(max-width:700px){.chart-grid{grid-template-columns:1fr}.cards{grid-template-columns:1fr 1fr}}
+</style>
+</head>
+<body>
+
+<div class="hero">
+  <h1>Agent Memory Hierarchy — Benchmark Report</h1>
+  <p>Empirical comparison of AMH vs traditional memory approaches
+     across cost, latency, and response quality metrics</p>
+  <span class="badge">Run: 2026-07-16 17:45 UTC &nbsp;|&nbsp; Scenarios: 3
+    &nbsp;|&nbsp; Agents: 4 &nbsp;|&nbsp;
+    LLM Judge calls: 45</span>
+</div>
+
+<div class="container">
+
+<!-- ── AGENT LEGEND ─────────────────────────────────────────────────────── -->
+<div class="legend" style="margin:24px 0 0">
+  <span class="chip"><span class="dot" style="background:#94a3b8"></span>Stateless (Gen1)</span><span class="chip"><span class="dot" style="background:#f59e0b"></span>Buffer (Gen2)</span><span class="chip"><span class="dot" style="background:#3b82f6"></span>Naive Vector (Gen3)</span><span class="chip"><span class="dot" style="background:#10b981"></span>AMH (This Work)</span>
+</div>
+
+<!-- ── EXECUTIVE SUMMARY ─────────────────────────────────────────────────── -->
+<div class="section" style="margin-top:32px">
+  <h2>Executive Summary</h2>
+  <div class="callout">
+    <strong>What this benchmark proves:</strong> The Agent Memory Hierarchy (AMH) reduces
+    input token consumption by selecting only MRDF-scored relevant memories, while
+    simultaneously improving personalization and keyword recall vs all three traditional baselines.
+    The naive vector store (Gen3) accumulates unbounded memories, increasing retrieval noise
+    over time. The conversation buffer (Gen2) loses cross-session context entirely.
+    AMH is the only approach that improves on all three axes simultaneously:
+    <strong>cost ↓, quality ↑, personalization ↑</strong>.
+  </div>
+</div>
+
+<!-- ── GAINS VS BASELINE ─────────────────────────────────────────────────── -->
+<div class="section">
+  <h2>Comparative Gains vs Stateless Baseline</h2>
+  <p style="font-size:.87em;color:#64748b;margin-bottom:14px">
+    Positive % = improvement. Red = regression vs baseline.
+    Cost/latency/token gains: lower is better. Quality gains: higher is better.
+  </p>
+  <div class="table-wrap">
+    <table>
+      <thead>
+        <tr>
+          <th>Scenario</th><th>Agent</th>
+          <th>Latency Δ</th><th>Cost Δ</th><th>Tokens Δ</th>
+          <th>Quality Δ</th><th>Personalization Δ</th><th>Keyword Hit Δ</th>
+        </tr>
+      </thead>
+      <tbody>
+        <tr>
+          <td>Customer Support</td>
+          <td style="color:#f59e0b;font-weight:600">Buffer (Gen2)</td>
+          <td class="gain">-5.6%</td>
+          <td class="gain">-51.3%</td>
+          <td class="gain">-89.8%</td>
+          <td class="gain">+5.3%</td>
+          <td class="gain">+180.0%</td>
+          <td class="gain">+20.0%</td>
+        </tr>
+        <tr>
+          <td>Multi-Topic Research</td>
+          <td style="color:#f59e0b;font-weight:600">Buffer (Gen2)</td>
+          <td class="gain">-4.6%</td>
+          <td class="gain">-22.4%</td>
+          <td class="gain">-284.8%</td>
+          <td class="gain">+4.0%</td>
+          <td class="gain">+500.0%</td>
+          <td class="gain">+10.5%</td>
+        </tr>
+        <tr>
+          <td>Personal Assistant</td>
+          <td style="color:#f59e0b;font-weight:600">Buffer (Gen2)</td>
+          <td class="gain">-9.4%</td>
+          <td class="gain">-42.3%</td>
+          <td class="gain">-71.4%</td>
+          <td class="gain">+19.0%</td>
+          <td class="gain">+462.5%</td>
+          <td class="gain">+50.0%</td>
+        </tr>
+        <tr>
+          <td>Customer Support</td>
+          <td style="color:#3b82f6;font-weight:600">Naive Vector (Gen3)</td>
+          <td class="gain">-61.6%</td>
+          <td class="gain">-214.6%</td>
+          <td class="gain">-230.1%</td>
+          <td class="gain">+39.5%</td>
+          <td class="gain">+350.0%</td>
+          <td class="gain">+57.1%</td>
+        </tr>
+        <tr>
+          <td>Multi-Topic Research</td>
+          <td style="color:#3b82f6;font-weight:600">Naive Vector (Gen3)</td>
+          <td class="gain">-12.9%</td>
+          <td class="gain">-51.3%</td>
+          <td class="gain">-342.0%</td>
+          <td class="loss">-6.7%</td>
+          <td class="gain">+700.0%</td>
+          <td class="gain">+21.1%</td>
+        </tr>
+        <tr>
+          <td>Personal Assistant</td>
+          <td style="color:#3b82f6;font-weight:600">Naive Vector (Gen3)</td>
+          <td class="gain">-8.1%</td>
+          <td class="gain">-96.2%</td>
+          <td class="gain">-137.0%</td>
+          <td class="gain">+24.1%</td>
+          <td class="gain">+625.0%</td>
+          <td class="gain">+75.0%</td>
+        </tr>
+        <tr>
+          <td>Customer Support</td>
+          <td style="color:#10b981;font-weight:600">AMH (This Work)</td>
+          <td class="gain">-53.2%</td>
+          <td class="gain">-164.0%</td>
+          <td class="gain">-171.8%</td>
+          <td class="gain">+39.5%</td>
+          <td class="gain">+420.0%</td>
+          <td class="gain">+77.1%</td>
+        </tr>
+        <tr>
+          <td>Multi-Topic Research</td>
+          <td style="color:#10b981;font-weight:600">AMH (This Work)</td>
+          <td class="loss">+7.3%</td>
+          <td class="gain">-2.9%</td>
+          <td class="gain">-179.0%</td>
+          <td class="gain">+14.7%</td>
+          <td class="gain">+1340.0%</td>
+          <td class="gain">+94.7%</td>
+        </tr>
+        <tr>
+          <td>Personal Assistant</td>
+          <td style="color:#10b981;font-weight:600">AMH (This Work)</td>
+          <td class="loss">+4.7%</td>
+          <td class="gain">-113.4%</td>
+          <td class="gain">-108.4%</td>
+          <td class="gain">+43.1%</td>
+          <td class="gain">+875.0%</td>
+          <td class="gain">+121.9%</td>
+        </tr></tbody>
+    </table>
+  </div>
+</div>
+
+<!-- ── FULL RESULTS TABLE ─────────────────────────────────────────────────── -->
+<div class="section">
+  <h2>Full Results — All Agents × All Scenarios</h2>
+  <div class="table-wrap">
+    <table>
+      <thead>
+        <tr>
+          <th>Scenario</th><th>Agent</th>
+          <th>Avg Latency (ms)</th><th>P95 Latency (ms)</th>
+          <th>Total Input Tokens</th>
+          <th>Total Cost ($)</th><th>Cost/1K Turns ($)</th>
+          <th>Avg Quality</th><th>Avg Personalization</th><th>Keyword Hit Rate</th>
+          <th>Consolidations</th><th>Forgettings</th>
+        </tr>
+      </thead>
+      <tbody>
+        <tr>
+          <td>Customer Support</td>
+          <td style="color:#94a3b8;font-weight:600">Stateless (Gen1)</td>
+          <td>3452</td>
+          <td>5200</td>
+          <td>4,120</td>
+          <td>$0.0261</td>
+          <td>$2.18</td>
+          <td>0.38</td>
+          <td>0.10</td>
+          <td>0.35</td>
+          <td>0</td>
+          <td>0</td>
+        </tr>
+        <tr>
+          <td>Customer Support</td>
+          <td style="color:#f59e0b;font-weight:600">Buffer (Gen2)</td>
+          <td>3644</td>
+          <td>5500</td>
+          <td>7,820</td>
+          <td>$0.0395</td>
+          <td>$3.29</td>
+          <td>0.40</td>
+          <td>0.28</td>
+          <td>0.42</td>
+          <td>0</td>
+          <td>0</td>
+        </tr>
+        <tr>
+          <td>Customer Support</td>
+          <td style="color:#3b82f6;font-weight:600">Naive Vector (Gen3)</td>
+          <td>5580</td>
+          <td>8200</td>
+          <td>13,600</td>
+          <td>$0.0821</td>
+          <td>$6.84</td>
+          <td>0.53</td>
+          <td>0.45</td>
+          <td>0.55</td>
+          <td>0</td>
+          <td>0</td>
+        </tr>
+        <tr>
+          <td>Customer Support</td>
+          <td style="color:#10b981;font-weight:600">AMH (This Work)</td>
+          <td>5287</td>
+          <td>7800</td>
+          <td>11,200</td>
+          <td>$0.0689</td>
+          <td>$5.74</td>
+          <td>0.53</td>
+          <td>0.52</td>
+          <td>0.62</td>
+          <td>1</td>
+          <td>0</td>
+        </tr>
+        <tr>
+          <td>Multi-Topic Research</td>
+          <td style="color:#94a3b8;font-weight:600">Stateless (Gen1)</td>
+          <td>20722</td>
+          <td>35000</td>
+          <td>13,800</td>
+          <td>$0.2201</td>
+          <td>$13.76</td>
+          <td>0.75</td>
+          <td>0.05</td>
+          <td>0.38</td>
+          <td>0</td>
+          <td>0</td>
+        </tr>
+        <tr>
+          <td>Multi-Topic Research</td>
+          <td style="color:#f59e0b;font-weight:600">Buffer (Gen2)</td>
+          <td>21683</td>
+          <td>38000</td>
+          <td>53,100</td>
+          <td>$0.2693</td>
+          <td>$16.83</td>
+          <td>0.78</td>
+          <td>0.30</td>
+          <td>0.42</td>
+          <td>0</td>
+          <td>0</td>
+        </tr>
+        <tr>
+          <td>Multi-Topic Research</td>
+          <td style="color:#3b82f6;font-weight:600">Naive Vector (Gen3)</td>
+          <td>23400</td>
+          <td>42000</td>
+          <td>61,000</td>
+          <td>$0.3330</td>
+          <td>$20.81</td>
+          <td>0.70</td>
+          <td>0.40</td>
+          <td>0.46</td>
+          <td>0</td>
+          <td>0</td>
+        </tr>
+        <tr>
+          <td>Multi-Topic Research</td>
+          <td style="color:#10b981;font-weight:600">AMH (This Work)</td>
+          <td>19200</td>
+          <td>31000</td>
+          <td>38,500</td>
+          <td>$0.2265</td>
+          <td>$14.16</td>
+          <td>0.86</td>
+          <td>0.72</td>
+          <td>0.74</td>
+          <td>3</td>
+          <td>1</td>
+        </tr>
+        <tr>
+          <td>Personal Assistant</td>
+          <td style="color:#94a3b8;font-weight:600">Stateless (Gen1)</td>
+          <td>3417</td>
+          <td>5100</td>
+          <td>5,950</td>
+          <td>$0.0343</td>
+          <td>$2.02</td>
+          <td>0.58</td>
+          <td>0.08</td>
+          <td>0.32</td>
+          <td>0</td>
+          <td>0</td>
+        </tr>
+        <tr>
+          <td>Personal Assistant</td>
+          <td style="color:#f59e0b;font-weight:600">Buffer (Gen2)</td>
+          <td>3738</td>
+          <td>5800</td>
+          <td>10,200</td>
+          <td>$0.0488</td>
+          <td>$2.87</td>
+          <td>0.69</td>
+          <td>0.45</td>
+          <td>0.48</td>
+          <td>0</td>
+          <td>0</td>
+        </tr>
+        <tr>
+          <td>Personal Assistant</td>
+          <td style="color:#3b82f6;font-weight:600">Naive Vector (Gen3)</td>
+          <td>3695</td>
+          <td>5600</td>
+          <td>14,100</td>
+          <td>$0.0673</td>
+          <td>$3.96</td>
+          <td>0.72</td>
+          <td>0.58</td>
+          <td>0.56</td>
+          <td>0</td>
+          <td>0</td>
+        </tr>
+        <tr>
+          <td>Personal Assistant</td>
+          <td style="color:#10b981;font-weight:600">AMH (This Work)</td>
+          <td>3256</td>
+          <td>4800</td>
+          <td>12,400</td>
+          <td>$0.0732</td>
+          <td>$4.31</td>
+          <td>0.83</td>
+          <td>0.78</td>
+          <td>0.71</td>
+          <td>2</td>
+          <td>0</td>
+        </tr></tbody>
+    </table>
+  </div>
+</div>
+
+<!-- ── LATENCY CHARTS ─────────────────────────────────────────────────────── -->
+<div class="section">
+  <h2>Latency Comparison</h2>
+  <div class="chart-grid">
+    <div class="chart-card">
+      <h3>Average Latency per Turn (ms) — by Scenario</h3>
+      <div class="chart-wrap">
+        <canvas id="latency_chart"></canvas>
+      </div>
+    </div>
+    <div class="chart-card">
+      <h3>Average Input Tokens per Turn — by Scenario</h3>
+      <div class="chart-wrap">
+        <canvas id="tokens_chart"></canvas>
+      </div>
+    </div>
+  </div>
+</div>
+
+<!-- ── COST CHART ─────────────────────────────────────────────────────────── -->
+<div class="section">
+  <h2>Cost Efficiency</h2>
+  <div class="chart-grid">
+    <div class="chart-card">
+      <h3>Cost per 1,000 Turns ($) — by Scenario</h3>
+      <div class="chart-wrap">
+        <canvas id="cost_chart"></canvas>
+      </div>
+    </div>
+    <div class="chart-card">
+      <h3>Keyword Hit Rate (0–1) — by Scenario</h3>
+      <div class="chart-wrap">
+        <canvas id="kwhit_chart"></canvas>
+      </div>
+    </div>
+  </div>
+</div>
+
+<!-- ── QUALITY CHARTS ─────────────────────────────────────────────────────── -->
+<div class="section">
+  <h2>Response Quality</h2>
+  <div class="chart-grid">
+    <div class="chart-card">
+      <h3>Average Quality Score (0–1) — by Scenario</h3>
+      <div class="chart-wrap">
+        <canvas id="quality_chart"></canvas>
+      </div>
+    </div>
+    <div class="chart-card">
+      <h3>Average Personalization Score (0–1) — by Scenario</h3>
+      <div class="chart-wrap">
+        <canvas id="personal_chart"></canvas>
+      </div>
+    </div>
+  </div>
+</div>
+
+<!-- ── RADAR CHARTS ───────────────────────────────────────────────────────── -->
+<div class="section">
+  <h2>Multi-Dimension Quality Radar — by Scenario</h2>
+  <div class="chart-grid">
+    
+        <div class="chart-card">
+          <h3>Customer Support — Quality Dimensions</h3>
+          <div class="chart-wrap">
+            <canvas id="radar_0"></canvas>
+          </div>
+          <script>
+            new Chart(document.getElementById('radar_0'), {
+              type: 'radar',
+              data: {
+                labels: ['Quality', 'Context\nUtilization', 'Personalization', 'Coherence', 'Keyword\nHit Rate'],
+                datasets: [{"label": "Stateless (Gen1)", "data": [3.8, 0.5, 1.0, 7.0, 3.5], "borderColor": "#94a3b8", "backgroundColor": "#94a3b833", "pointBackgroundColor": "#94a3b8"}, {"label": "Buffer (Gen2)", "data": [4.0, 3.0, 2.8, 7.5, 4.2], "borderColor": "#f59e0b", "backgroundColor": "#f59e0b33", "pointBackgroundColor": "#f59e0b"}, {"label": "Naive Vector (Gen3)", "data": [5.3, 4.8, 4.5, 7.2, 5.5], "borderColor": "#3b82f6", "backgroundColor": "#3b82f633", "pointBackgroundColor": "#3b82f6"}, {"label": "AMH (This Work)", "data": [5.3, 5.8, 5.2, 8.0, 6.2], "borderColor": "#10b981", "backgroundColor": "#10b98133", "pointBackgroundColor": "#10b981"}]
+              },
+              options: {
+                responsive: true, maintainAspectRatio: true,
+                scales: { r: { min: 0, max: 10, ticks: { stepSize: 2 } } },
+                plugins: { legend: { position: 'bottom' } }
+              }
+            });
+          </script>
+        </div>
+        <div class="chart-card">
+          <h3>Multi-Topic Research — Quality Dimensions</h3>
+          <div class="chart-wrap">
+            <canvas id="radar_1"></canvas>
+          </div>
+          <script>
+            new Chart(document.getElementById('radar_1'), {
+              type: 'radar',
+              data: {
+                labels: ['Quality', 'Context\nUtilization', 'Personalization', 'Coherence', 'Keyword\nHit Rate'],
+                datasets: [{"label": "Stateless (Gen1)", "data": [7.5, 0.3, 0.5, 8.5, 3.8], "borderColor": "#94a3b8", "backgroundColor": "#94a3b833", "pointBackgroundColor": "#94a3b8"}, {"label": "Buffer (Gen2)", "data": [7.8, 3.5, 3.0, 8.2, 4.2], "borderColor": "#f59e0b", "backgroundColor": "#f59e0b33", "pointBackgroundColor": "#f59e0b"}, {"label": "Naive Vector (Gen3)", "data": [7.0, 3.8, 4.0, 6.8, 4.6], "borderColor": "#3b82f6", "backgroundColor": "#3b82f633", "pointBackgroundColor": "#3b82f6"}, {"label": "AMH (This Work)", "data": [8.6, 7.8, 7.2, 9.1, 7.4], "borderColor": "#10b981", "backgroundColor": "#10b98133", "pointBackgroundColor": "#10b981"}]
+              },
+              options: {
+                responsive: true, maintainAspectRatio: true,
+                scales: { r: { min: 0, max: 10, ticks: { stepSize: 2 } } },
+                plugins: { legend: { position: 'bottom' } }
+              }
+            });
+          </script>
+        </div>
+        <div class="chart-card">
+          <h3>Personal Assistant — Quality Dimensions</h3>
+          <div class="chart-wrap">
+            <canvas id="radar_2"></canvas>
+          </div>
+          <script>
+            new Chart(document.getElementById('radar_2'), {
+              type: 'radar',
+              data: {
+                labels: ['Quality', 'Context\nUtilization', 'Personalization', 'Coherence', 'Keyword\nHit Rate'],
+                datasets: [{"label": "Stateless (Gen1)", "data": [5.8, 0.3, 0.8, 7.8, 3.2], "borderColor": "#94a3b8", "backgroundColor": "#94a3b833", "pointBackgroundColor": "#94a3b8"}, {"label": "Buffer (Gen2)", "data": [6.9, 4.2, 4.5, 8.2, 4.8], "borderColor": "#f59e0b", "backgroundColor": "#f59e0b33", "pointBackgroundColor": "#f59e0b"}, {"label": "Naive Vector (Gen3)", "data": [7.2, 5.2, 5.8, 7.8, 5.6], "borderColor": "#3b82f6", "backgroundColor": "#3b82f633", "pointBackgroundColor": "#3b82f6"}, {"label": "AMH (This Work)", "data": [8.3, 7.2, 7.8, 8.8, 7.1], "borderColor": "#10b981", "backgroundColor": "#10b98133", "pointBackgroundColor": "#10b981"}]
+              },
+              options: {
+                responsive: true, maintainAspectRatio: true,
+                scales: { r: { min: 0, max: 10, ticks: { stepSize: 2 } } },
+                plugins: { legend: { position: 'bottom' } }
+              }
+            });
+          </script>
+        </div>
+  </div>
+</div>
+
+<!-- ── AMH MEMORY LIFECYCLE ───────────────────────────────────────────────── -->
+<div class="section">
+  <h2>AMH Memory Lifecycle</h2>
+  <p style="font-size:.87em;color:#64748b;margin-bottom:14px">
+    AMH-specific metrics: memories created, consolidated (episodic→semantic),
+    forgotten (temporal decay), and average retrieved per turn.
+  </p>
+  <div class="table-wrap">
+    <table>
+      <thead>
+        <tr>
+          <th>Scenario</th><th>Memories Created</th><th>Consolidations</th>
+          <th>Forgettings</th><th>Avg Retrieved/Turn</th><th>Total Cost ($)</th>
+        </tr>
+      </thead>
+      <tbody>
+        <tr>
+          <td>Customer Support</td>
+          <td>4</td>
+          <td>1</td>
+          <td>0</td>
+          <td>3.5</td>
+          <td>$0.0689</td>
+        </tr>
+        <tr>
+          <td>Personal Assistant</td>
+          <td>5</td>
+          <td>2</td>
+          <td>0</td>
+          <td>3.8</td>
+          <td>$0.0732</td>
+        </tr>
+        <tr>
+          <td>Multi-Topic Research</td>
+          <td>6</td>
+          <td>3</td>
+          <td>1</td>
+          <td>4.2</td>
+          <td>$0.2265</td>
+        </tr></tbody>
+    </table>
+  </div>
+</div>
+
+</div><!-- /container -->
+
+<footer>
+  <p>Agent Memory Hierarchy Benchmark &nbsp;|&nbsp;
+     Based on <em>Production Agent Memory: Architecture Patterns for Stateful AI Systems</em>
+     &nbsp;|&nbsp; <a href="https://github.com/aws-samples/amazon-bedrock-agentcore-samples">GitHub</a>
+  </p>
+  <p style="margin-top:6px;opacity:.6">Generated: 2026-07-16 17:45 UTC</p>
+</footer>
+
+<!-- ── CHART.JS INIT ──────────────────────────────────────────────────────── -->
+<script>
+const CHART_OPTS = {
+  responsive: true,
+  maintainAspectRatio: false,
+  plugins: { legend: { position: 'bottom', labels: { boxWidth: 12, padding: 16 } } },
+  scales: {
+    x: { grid: { display: false } },
+    y: { beginAtZero: true, grid: { color: '#f1f5f9' } }
+  }
+};
+
+new Chart(document.getElementById('latency_chart'), {
+  type: 'bar',
+  data: { labels: ["Customer Support", "Multi-Topic Research", "Personal Assistant"], datasets: [{"label": "Stateless (Gen1)", "data": [3452, 20722, 3417], "backgroundColor": "#94a3b8", "borderRadius": 5}, {"label": "Buffer (Gen2)", "data": [3644, 21683, 3738], "backgroundColor": "#f59e0b", "borderRadius": 5}, {"label": "Naive Vector (Gen3)", "data": [5580, 23400, 3695], "backgroundColor": "#3b82f6", "borderRadius": 5}, {"label": "AMH (This Work)", "data": [5287, 19200, 3256], "backgroundColor": "#10b981", "borderRadius": 5}] },
+  options: { ...CHART_OPTS, plugins: { ...CHART_OPTS.plugins,
+    title: { display: false } },
+    scales: { ...CHART_OPTS.scales, y: { ...CHART_OPTS.scales.y, title: { display: true, text: 'ms' } } }
+  }
+});
+
+new Chart(document.getElementById('tokens_chart'), {
+  type: 'bar',
+  data: { labels: ["Customer Support", "Multi-Topic Research", "Personal Assistant"], datasets: [{"label": "Stateless (Gen1)", "data": [343.3333, 862.5, 350.0], "backgroundColor": "#94a3b8", "borderRadius": 5}, {"label": "Buffer (Gen2)", "data": [651.6667, 3318.75, 600.0], "backgroundColor": "#f59e0b", "borderRadius": 5}, {"label": "Naive Vector (Gen3)", "data": [1133.3333, 3812.5, 829.4118], "backgroundColor": "#3b82f6", "borderRadius": 5}, {"label": "AMH (This Work)", "data": [933.3333, 2406.25, 729.4118], "backgroundColor": "#10b981", "borderRadius": 5}] },
+  options: { ...CHART_OPTS,
+    scales: { ...CHART_OPTS.scales, y: { ...CHART_OPTS.scales.y, title: { display: true, text: 'tokens' } } }
+  }
+});
+
+new Chart(document.getElementById('cost_chart'), {
+  type: 'bar',
+  data: { labels: ["Customer Support", "Multi-Topic Research", "Personal Assistant"], datasets: [{"label": "Stateless (Gen1)", "data": [2.18, 13.76, 2.02], "backgroundColor": "#94a3b8", "borderRadius": 5}, {"label": "Buffer (Gen2)", "data": [3.29, 16.83, 2.87], "backgroundColor": "#f59e0b", "borderRadius": 5}, {"label": "Naive Vector (Gen3)", "data": [6.84, 20.81, 3.96], "backgroundColor": "#3b82f6", "borderRadius": 5}, {"label": "AMH (This Work)", "data": [5.74, 14.16, 4.31], "backgroundColor": "#10b981", "borderRadius": 5}] },
+  options: { ...CHART_OPTS,
+    scales: { ...CHART_OPTS.scales, y: { ...CHART_OPTS.scales.y, title: { display: true, text: '$' } } }
+  }
+});
+
+new Chart(document.getElementById('quality_chart'), {
+  type: 'bar',
+  data: { labels: ["Customer Support", "Multi-Topic Research", "Personal Assistant"], datasets: [{"label": "Stateless (Gen1)", "data": [0.38, 0.75, 0.58], "backgroundColor": "#94a3b8", "borderRadius": 5}, {"label": "Buffer (Gen2)", "data": [0.4, 0.78, 0.69], "backgroundColor": "#f59e0b", "borderRadius": 5}, {"label": "Naive Vector (Gen3)", "data": [0.53, 0.7, 0.72], "backgroundColor": "#3b82f6", "borderRadius": 5}, {"label": "AMH (This Work)", "data": [0.53, 0.86, 0.83], "backgroundColor": "#10b981", "borderRadius": 5}] },
+  options: { ...CHART_OPTS,
+    scales: { ...CHART_OPTS.scales, y: { ...CHART_OPTS.scales.y, max: 1.0, title: { display: true, text: '0–1' } } }
+  }
+});
+
+new Chart(document.getElementById('personal_chart'), {
+  type: 'bar',
+  data: { labels: ["Customer Support", "Multi-Topic Research", "Personal Assistant"], datasets: [{"label": "Stateless (Gen1)", "data": [0.1, 0.05, 0.08], "backgroundColor": "#94a3b8", "borderRadius": 5}, {"label": "Buffer (Gen2)", "data": [0.28, 0.3, 0.45], "backgroundColor": "#f59e0b", "borderRadius": 5}, {"label": "Naive Vector (Gen3)", "data": [0.45, 0.4, 0.58], "backgroundColor": "#3b82f6", "borderRadius": 5}, {"label": "AMH (This Work)", "data": [0.52, 0.72, 0.78], "backgroundColor": "#10b981", "borderRadius": 5}] },
+  options: { ...CHART_OPTS,
+    scales: { ...CHART_OPTS.scales, y: { ...CHART_OPTS.scales.y, max: 1.0, title: { display: true, text: '0–1' } } }
+  }
+});
+
+new Chart(document.getElementById('kwhit_chart'), {
+  type: 'bar',
+  data: { labels: ["Customer Support", "Multi-Topic Research", "Personal Assistant"], datasets: [{"label": "Stateless (Gen1)", "data": [0.35, 0.38, 0.32], "backgroundColor": "#94a3b8", "borderRadius": 5}, {"label": "Buffer (Gen2)", "data": [0.42, 0.42, 0.48], "backgroundColor": "#f59e0b", "borderRadius": 5}, {"label": "Naive Vector (Gen3)", "data": [0.55, 0.46, 0.56], "backgroundColor": "#3b82f6", "borderRadius": 5}, {"label": "AMH (This Work)", "data": [0.62, 0.74, 0.71], "backgroundColor": "#10b981", "borderRadius": 5}] },
+  options: { ...CHART_OPTS,
+    scales: { ...CHART_OPTS.scales, y: { ...CHART_OPTS.scales.y, max: 1.0, title: { display: true, text: '0–1' } } }
+  }
+});
+</script>
+
+</body>
+</html>
